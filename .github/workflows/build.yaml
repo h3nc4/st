@@ -1,0 +1,30 @@
+name: Build st
+
+on:
+  push:
+    branches:
+      - h3nc4
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Install dependencies
+      run: |
+        DEBIAN_FRONTEND=noninteractive
+        sudo apt-get update
+        sudo apt-get install -y build-essential libxft-dev libxinerama-dev libxkbfile-dev libharfbuzz-dev libfribidi-dev
+    - name: Checkout code
+      uses: actions/checkout@v4
+    - name: make
+      run: make all
+    - name: publish
+      uses: peaceiris/actions-gh-pages@v4
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        publish_dir: ./build
+        publish_branch: build
+        force_orphan: true
+        enable_jekyll: true
+        user_name: 'github-actions[bot]'
+        user_email: 'github-actions[bot]@users.noreply.github.com'
