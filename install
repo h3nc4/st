@@ -1,0 +1,10 @@
+#!/bin/env sh
+set -e
+VERSION=0.9.2
+PREFIX=/usr/local
+MANPREFIX=${PREFIX}/share/man
+install -Dm755 st ${PREFIX}/bin/st
+install -Dm755 st.1 ${MANPREFIX}/man1/st.1
+sed -i "s/VERSION/${VERSION}/g" ${MANPREFIX}/man1/st.1
+tic -sx st.info
+echo "st installed."
