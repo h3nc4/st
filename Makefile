@@ -8,7 +8,6 @@ SRC = st.c x.c
 OBJ = $(SRC:.c=.o)
 
 all: st
-	cp st st.1 st.info build
 
 config.h:
 	cp config.def.h config.h
@@ -35,6 +34,17 @@ dist: clean
 	tar -cf - st-$(VERSION) | gzip > st-$(VERSION).tar.gz
 	rm -rf st-$(VERSION)
 
+dist.built: st
+	mkdir -p st-$(VERSION)
+	cp st st.1 st-$(VERSION)
+	printf '#!/bin/sh\nset -e\n' >st-$(VERSION)/install
+	echo 'install -Dm755 st ${PREFIX}/bin/st' >>st-$(VERSION)/install
+	echo 'install -Dm644 st.1 ${MANPREFIX}/man1/st.1' >>st-$(VERSION)/install
+	echo 'sed -i "s/VERSION/$(VERSION)/g" ${MANPREFIX}/man1/st.1' >>st-$(VERSION)/install
+	chmod +x st-$(VERSION)/install
+	tar czf st.tgz st-$(VERSION)
+	rm -rf st-${VERSION}
+
 install: st
 	install -Dm755 st $(DESTDIR)$(PREFIX)/bin/st
 	install -Dm644 st.1 $(DESTDIR)$(MANPREFIX)/man1/st.1
@@ -45,4 +55,4 @@ uninstall:
 	rm -f $(DESTDIR)$(PREFIX)/bin/st
 	rm -f $(DESTDIR)$(MANPREFIX)/man1/st.1
 
-.PHONY: all clean dist install uninstall
+.PHONY: all clean dist install uninstall dist.built

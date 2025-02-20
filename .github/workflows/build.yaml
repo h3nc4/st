@@ -2,29 +2,55 @@ name: Build st
 
 on:
   push:
-    branches:
-      - h3nc4
+    branches: [ 'h3nc4' ]
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    container:
+      image: debian:bookworm-slim
     steps:
     - name: Install dependencies
       run: |
-        DEBIAN_FRONTEND=noninteractive
-        sudo apt-get update
-        sudo apt-get install -y build-essential libxft-dev libxinerama-dev libxkbfile-dev libharfbuzz-dev libfribidi-dev
+        apt-get update
+        DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+          ca-certificates \
+          gcc \
+          git \
+          libc-dev \
+          gpg \
+          gpg-agent \
+          libfribidi-dev \
+          libharfbuzz-dev \
+          libxft-dev \
+          libxinerama-dev \
+          libxkbfile-dev \
+          make
     - name: Checkout code
       uses: actions/checkout@v4
-    - name: make
-      run: make all
-    - name: publish
-      uses: peaceiris/actions-gh-pages@v4
+    - name: Build tar
+      run: make dist.built
+    - name: Gen tag name
+      run: echo "SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-8)" >>$GITHUB_ENV
+    - name: Import gpg key
+      run: echo "$GPG_PRIVATE_KEY" | gpg --batch --import
+      env:
+        GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+    - name: Sign artifact
+      run: gpg --batch --yes --pinentry-mode loopback --passphrase "$GPG_PASSPHRASE" --detach-sign --armor -o st.tgz.asc st.tgz
+      env:
+        GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+    - name: Create tag
+      run: |
+        git config --global safe.directory '*'
+        git tag ${{ env.SHORT_SHA }}
+        git push origin ${{ env.SHORT_SHA }}
+    - name: Release
+      uses: softprops/action-gh-release@v2
       with:
-        github_token: ${{ secrets.GITHUB_TOKEN }}
-        publish_dir: ./build
-        publish_branch: build
-        force_orphan: true
-        enable_jekyll: true
-        user_name: 'github-actions[bot]'
-        user_email: 'github-actions[bot]@users.noreply.github.com'
+        tag_name: ${{ env.SHORT_SHA }}
+        files: |
+          st.tgz.asc
+          st.tgz
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
