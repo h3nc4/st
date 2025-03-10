@@ -37,7 +37,7 @@ jobs:
       env:
         GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
     - name: Sign artifact
-      run: gpg --batch --yes --pinentry-mode loopback --passphrase "$GPG_PASSPHRASE" --detach-sign --armor -o st.tgz.asc st.tgz
+      run: gpg --batch --yes --pinentry-mode loopback --passphrase "$GPG_PASSPHRASE" --detach-sign --armor -o st.tar.gz.asc st.tar.gz
       env:
         GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
     - name: Create tag
@@ -50,7 +50,7 @@ jobs:
       with:
         tag_name: ${{ env.SHORT_SHA }}
         files: |
-          st.tgz.asc
-          st.tgz
+          st.tar.gz.asc
+          st.tar.gz
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

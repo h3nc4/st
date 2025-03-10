@@ -43,7 +43,7 @@ dist.built: st
 	echo 'sed -i "s/VERSION/$(VERSION)/g" ${MANPREFIX}/man1/st.1' >>st-$(VERSION)/install
 	echo 'tic -sx st.info' >>st-$(VERSION)/install
 	chmod +x st-$(VERSION)/install
-	tar czf st.tgz st-$(VERSION)
+	tar czf st.tar.gz st-$(VERSION)
 	rm -rf st-${VERSION}
 
 install: st
