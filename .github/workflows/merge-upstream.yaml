@@ -1,0 +1,109 @@
+name: Merge upstream
+
+on:
+  schedule:
+    - cron: "21 6 * * 1" # Weekly, on Mondays
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}
+
+env:
+  UPSTREAM: https://git.suckless.org/st
+  UPSTREAM_BRANCH: master
+  SYNC_BRANCH: upstream-sync
+
+jobs:
+  merge:
+    name: Merge upstream into h3nc4
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # pushes the sync branch and its merge commit
+      pull-requests: write # opens the pull request
+      issues: write # files the conflict report
+    steps:
+      # Full history: the merge base is years back.
+      - name: Run actions/checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: "h3nc4"
+          fetch-depth: 0
+      - name: Read the pinned dev image
+        run: echo "DEV_IMAGE=$(./scripts/devcontainer-image.sh)" >>"${GITHUB_ENV}"
+      - name: Fetch upstream
+        run: |
+          git fetch --no-tags "${UPSTREAM}" "${UPSTREAM_BRANCH}"
+          echo "UPSTREAM_SHA=$(git rev-parse FETCH_HEAD)" >>"${GITHUB_ENV}"
+      - name: Look for new commits
+        id: check
+        run: |
+          if git merge-base --is-ancestor "${UPSTREAM_SHA}" HEAD; then
+            echo "::notice::already merged up to ${UPSTREAM_SHA}"
+            echo "new=false" >>"${GITHUB_OUTPUT}"
+            exit 0
+          fi
+          echo "new=true" >>"${GITHUB_OUTPUT}"
+          echo "count=$(git rev-list --count "HEAD..${UPSTREAM_SHA}")" >>"${GITHUB_OUTPUT}"
+      - name: Merge
+        if: steps.check.outputs.new == 'true'
+        id: merge
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git checkout -B "${SYNC_BRANCH}"
+          if git merge -m "merge upstream ${UPSTREAM_SHA}" "${UPSTREAM_SHA}"; then
+            echo "clean=true" >>"${GITHUB_OUTPUT}"
+          else
+            git diff --name-only --diff-filter=U >"${RUNNER_TEMP}/conflicts.txt"
+            git merge --abort
+            echo "clean=false" >>"${GITHUB_OUTPUT}"
+          fi
+      # A pull request opened with GITHUB_TOKEN starts no further workflow run, so the
+      # build that gates the merge has to happen here. --user keeps the object files
+      # owned by the runner, so the next checkout can clear them.
+      - name: Build the merged tree
+        if: steps.merge.outputs.clean == 'true'
+        run: |
+          docker run --rm \
+            --user "$(id -u):$(id -g)" \
+            -v "${PWD}:/workspaces" \
+            "${DEV_IMAGE}" \
+            ./scripts/ci.sh
+      - name: Open the pull request
+        if: steps.merge.outputs.clean == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          COUNT: ${{ steps.check.outputs.count }}
+        run: |
+          git push -f origin "${SYNC_BRANCH}"
+          url="$(gh pr list --head "${SYNC_BRANCH}" --base "h3nc4" --state open \
+            --json url --jq '.[0].url // empty')"
+          if [ -z "${url}" ]; then
+            url="$(gh pr create --head "${SYNC_BRANCH}" --base "h3nc4" \
+              --title "merge upstream ${UPSTREAM_SHA}" \
+              --body "${COUNT} commits from ${UPSTREAM}, built in ${DEV_IMAGE}.")"
+          fi
+          gh pr merge --auto --merge --delete-branch "${url}" ||
+            echo "::warning::auto-merge is off for this repository, ${url} is waiting"
+      # A conflict is a patch to rework, which is not something CI can do. It reports and
+      # stops, then repeats the report on every later run until the merge is committed.
+      - name: Report the conflict
+        if: steps.merge.outputs.clean == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          title="upstream merge conflicts with ${UPSTREAM_SHA}"
+          number="$(gh issue list --state open --search "${title} in:title" \
+            --json number --jq '.[0].number // empty')"
+          if [ -n "${number}" ]; then
+            gh issue comment "${number}" --body "Still conflicting on $(date -u +%F)."
+            exit 0
+          fi
+          {
+            printf 'Conflicting files:\n\n```\n%s```\n' \
+              "$(cat "${RUNNER_TEMP}/conflicts.txt")"
+            printf '\nResolve locally:\n\n```sh\n'
+            printf 'git fetch %s %s\n' "${UPSTREAM}" "${UPSTREAM_BRANCH}"
+            printf 'git checkout h3nc4\ngit merge FETCH_HEAD\n```\n'
+          } >"${RUNNER_TEMP}/body.md"
+          gh issue create --title "${title}" --body-file "${RUNNER_TEMP}/body.md"
