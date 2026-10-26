@@ -97,7 +97,7 @@ char *termname = "st-256color";
  *
  *	stty tabs
  */
-unsigned int tabspaces = 8;
+unsigned int tabspaces = 8; /* must be > 0 */
 
 /* bg opacity */
 float alpha = 0.7;
