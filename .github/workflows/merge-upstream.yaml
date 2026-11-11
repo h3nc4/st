@@ -69,10 +69,18 @@ jobs:
             -v "${PWD}:/workspaces" \
             "${DEV_IMAGE}" \
             ./scripts/ci.sh
-      - name: Open the pull request
+      - name: Mint an app token
+        if: steps.merge.outputs.clean == 'true'
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: "4811373"
+          private-key: ${{ secrets.AUTOMERGE_APP_PRIVATE_KEY }}
+      - name: Open and merge the pull request
         if: steps.merge.outputs.clean == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MERGE_TOKEN: ${{ steps.app-token.outputs.token }}
           COUNT: ${{ steps.check.outputs.count }}
         run: |
           git push -f origin "${SYNC_BRANCH}"
@@ -83,8 +91,10 @@ jobs:
               --title "merge upstream ${UPSTREAM_SHA}" \
               --body "${COUNT} commits from ${UPSTREAM}, built in ${DEV_IMAGE}.")"
           fi
-          gh pr merge --auto --merge --delete-branch "${url}" ||
-            echo "::warning::auto-merge is off for this repository, ${url} is waiting"
+          GH_TOKEN="${MERGE_TOKEN}" gh pr merge "${url}" --repo "${GITHUB_REPOSITORY}" \
+            --merge --delete-branch --match-head-commit "$(git rev-parse HEAD)" \
+            --subject "merge pull request #${url##*/} from ${GITHUB_REPOSITORY_OWNER}/${SYNC_BRANCH}" \
+            --body ""
       # A conflict is a patch to rework, which is not something CI can do. It reports and
       # stops, then repeats the report on every later run until the merge is committed.
       - name: Report the conflict
