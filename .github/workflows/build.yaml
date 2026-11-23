@@ -37,3 +37,62 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Run the checks
         run: ./scripts/ci.sh
+
+  deb:
+    name: Build the .deb
+    runs-on: ubuntu-latest
+    container:
+      image: debian:trixie@sha256:9c6e381421d0f48d1b8133e573f33c185ee16cbf505eda9c4a8a4791b25ea8a6
+    steps:
+      - name: Install the packaging tools
+        run: |
+          apt-get update -qq
+          apt-get install -y -qq --no-install-recommends ca-certificates git make gcc libc6-dev \
+            pkg-config libx11-dev libxft-dev dpkg-dev lintian
+          git config --system --add safe.directory '*'
+      - name: Run actions/checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Build the .deb
+        run: ./scripts/deb.sh dist
+      - name: Run lintian
+        run: lintian --fail-on warning --pedantic dist/*.deb
+      - name: Run actions/upload-artifact
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: deb
+          path: dist/*.deb
+          if-no-files-found: error
+
+  install-debian:
+    name: Install on Debian trixie
+    runs-on: ubuntu-latest
+    needs: deb
+    container:
+      image: debian:trixie@sha256:9c6e381421d0f48d1b8133e573f33c185ee16cbf505eda9c4a8a4791b25ea8a6
+    steps:
+      - name: Run actions/checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Run actions/download-artifact
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: deb
+          path: dist
+      - name: Install and purge the .deb
+        run: ./scripts/check-deb.sh dist
+
+  install-devuan:
+    name: Install on Devuan excalibur
+    runs-on: ubuntu-latest
+    needs: deb
+    container:
+      image: devuan/devuan:excalibur@sha256:e0f3f31d6137c9dba7441c44b4a92b4dafe5f8978b9ff389224a8120cab03e55
+    steps:
+      - name: Run actions/checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Run actions/download-artifact
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: deb
+          path: dist
+      - name: Install and purge the .deb
+        run: ./scripts/check-deb.sh dist

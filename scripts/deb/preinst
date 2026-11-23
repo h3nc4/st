@@ -1,0 +1,11 @@
+#!/bin/sh
+
+# ncurses-term ships st and st-256color too, so its copies move aside for the fork's.
+set -e
+
+if [ "$1" = install ] || [ "$1" = upgrade ]; then
+	dpkg-divert --package st-h3nc4 --add --rename \
+		--divert /usr/share/terminfo/s/st.ncurses-term /usr/share/terminfo/s/st
+	dpkg-divert --package st-h3nc4 --add --rename \
+		--divert /usr/share/terminfo/s/st-256color.ncurses-term /usr/share/terminfo/s/st-256color
+fi

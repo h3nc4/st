@@ -1,0 +1,10 @@
+#!/bin/sh
+
+set -e
+
+if [ "$1" = remove ] || [ "$1" = abort-install ] || [ "$1" = disappear ]; then
+	dpkg-divert --package st-h3nc4 --remove --rename \
+		--divert /usr/share/terminfo/s/st.ncurses-term /usr/share/terminfo/s/st
+	dpkg-divert --package st-h3nc4 --remove --rename \
+		--divert /usr/share/terminfo/s/st-256color.ncurses-term /usr/share/terminfo/s/st-256color
+fi
